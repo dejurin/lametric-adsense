@@ -3,8 +3,10 @@
 Adsense for La Metric (unofficial)
 
 ## Getting Started
+1. Go to https://console.developers.google.com and make Client ID OAuth 2.0
+2. Create new app https://developer.lametric.com/applications/createdisplay 
 
-
+example.php
 ```
 <?php
 
