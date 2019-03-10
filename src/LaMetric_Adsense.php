@@ -43,7 +43,7 @@ class LaMetric_Adsense
 
         $this->db->get('oauth2')->save($data);
         echo '<div><b>Auth</b>: ',
-        '<a href="',($authUrl),'">OAuth2 Google // Adsense</a> | <b>More</b>: <a href="https://packagist.org/packages/dejurin/lametric-adsense">dejurin/lametric-adsense</a></div>';
+        '<a href="',($authUrl),'">OAuth2 Google // Adsense</a><br><b>More</b>: <a href="https://packagist.org/packages/dejurin/lametric-adsense">dejurin/lametric-adsense</a></div>';
     }
 
     public function auth()
