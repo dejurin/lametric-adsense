@@ -1,7 +1,11 @@
 # lametric-adsense
+
 Adsense for La Metric (unofficial)
 
-Make file
+## Getting Started
+
+
+```
 <?php
 
 require 'vendor/autoload.php';
@@ -29,3 +33,5 @@ if (isset($_GET['auth'])) {
 } else {
 	$LMA->index();
 }
+
+```
