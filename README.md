@@ -14,7 +14,8 @@ $ php -S localhost:8000
 ```
 
 example.php
-```
+```php
+
 <?php
 
 require 'vendor/autoload.php';
