@@ -6,16 +6,16 @@ class LaMetric_Adsense
 {
     protected $fileScript;
     protected $provider;
-    protected $accessToken;
+    protected $laMetricAccessToken;
     protected $laMetricPushAllUrl;
     protected $db;
     protected $symbol = '$';
     protected $currency = 'USD';
 
-    public function __construct($config, $accessToken, $laMetricPushAllUrl, $dir, $fileScript)
+    public function __construct($config, $laMetricAccessToken, $laMetricPushAllUrl, $dir, $fileScript)
     {
         $this->fileScript = $fileScript;
-        $this->accessToken = $accessToken;
+        $this->laMetricAccessToken = $laMetricAccessToken;
         $this->laMetricPushAllUrl = $laMetricPushAllUrl;
         $this->provider = new \League\OAuth2\Client\Provider\Google($config);
         $this->db = new \Filebase\Database([
@@ -146,7 +146,7 @@ class LaMetric_Adsense
                 'headers' => [
                     'Accept' => 'application/json',
                     'Cache-Control' => 'no-cache',
-                    'X-Access-Token' => $this->accessToken,
+                    'X-Access-Token' => $this->laMetricAccessToken,
                 ],
                 'body' => $json
             ]);
