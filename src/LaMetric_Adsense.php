@@ -1,34 +1,31 @@
 <?php
 
-/*
-ini_set('precision', 14);
-ini_set('display_errors', 1);
-ini_set('display_startup_errors', 1);
-error_reporting(E_ALL);
-*/
-
 namespace Dejurin;
 
 class LaMetric_Adsense
 {
+    protected $fileScript;
     protected $provider;
+    protected $accessToken;
+    protected $laMetricPushAllUrl;
     protected $db;
     protected $symbol = '$';
     protected $currency = 'USD';
 
-    public function __construct($config)
+    public function __construct($config, $accessToken, $laMetricPushAllUrl, $dir, $fileScript)
     {
-        $this->provider = new \League\OAuth2\Client\Provider\Google($config, $currency, $symbol);
+        $this->fileScript = $fileScript;
+        $this->accessToken = $accessToken;
+        $this->laMetricPushAllUrl = $laMetricPushAllUrl;
+        $this->provider = new \League\OAuth2\Client\Provider\Google($config);
         $this->db = new \Filebase\Database([
-            'dir' => __DIR__.'/db',
+            'dir' => $dir,
             'format' => \Filebase\Format\Json::class,
             'cache' => false,
-            'pretty' => true,
+            'pretty' => false,
             'safe_filename' => true,
             'read_only' => false,
         ]);
-        $this->symbol = $symbol;
-        $this->currency = $currency;
     }
 
     public function index()
@@ -40,9 +37,13 @@ class LaMetric_Adsense
             'prompt' => 'consent',
         ]);
 
-        $oauth2 = $this->db->get('oauth2', ['state' => $this->provider->getState()]);
-        header('Location: '.$authUrl);
-        exit;
+        $data = [
+            'state' => $this->provider->getState(),
+        ];
+
+        $this->db->get('oauth2')->save($data);
+        echo '<div><b>Auth</b>: ',
+        '<a href="',($authUrl),'">OAuth2 Google // Adsense</a> | <b>More</b>: <a href="https://packagist.org/packages/dejurin/lametric-adsense">dejurin/lametric-adsense</a></div>';
     }
 
     public function auth()
@@ -53,21 +54,24 @@ class LaMetric_Adsense
             $this->db->get('oauth2')->delete();
             exit('Invalid state');
         } else {
-            $code = htmlspecialchars($_GET['code']);
-            $token = $this->provider->getAccessToken('authorization_code', [
-                'code' => $code,
-            ]);
+            try {
+                $code = htmlspecialchars($_GET['code']);
+                $token = $this->provider->getAccessToken('authorization_code', [
+                    'code' => $code
+                ]);
 
-            $ownerDetails = $this->provider->getResourceOwner($token);
+                $data = [
+                    'code' => $code,
+                    'token' => $token,
+                    'refresh_token' => $token->getRefreshToken(),
+                ];
 
-            $data = [
-                'code' => $code,
-                'token' => $token,
-                'refresh_token' => $token->getRefreshToken(),
-            ];
+                $this->db->get('oauth2user')->save($data);
+                $this->_getAdsenseAccounts($token);
 
-            $this->db->get('oauth2user')->save($data);
-            $this->_getAdsenseAccounts($token);
+            } catch (\League\OAuth2\Client\Provider\Exception\IdentityProviderException $e) {
+                exit($e->getMessage());
+            }
         }
     }
 
@@ -78,7 +82,7 @@ class LaMetric_Adsense
             htmlspecialchars($_GET['kind']) => htmlspecialchars($_GET['id']),
         ];
         $oauth2user->save();
-        header('Location: '.basename(__FILE__, '.php').'?data');
+        header('Location: '.$this->fileScript.'?show');
     }
 
     public function data()
@@ -90,20 +94,20 @@ class LaMetric_Adsense
         $_token = $oauth2user->token['access_token'];
 
         if (time() > $oauth2user->token['expires'] - 600) {
-            $token = $this->provider->getAccessToken(new League\OAuth2\Client\Grant\RefreshToken(), [
+            $token = $this->provider->getAccessToken(new \League\OAuth2\Client\Grant\RefreshToken(), [
                 'refresh_token' => $oauth2user->refresh_token,
             ]);
             try {
                 $oauth2user->token = $token;
                 $oauth2user->save();
-            } catch (Exception $e) {
-                exit('Something went wrong: '.$e->getMessage());
+            } catch (\League\OAuth2\Client\Provider\Exception\IdentityProviderException $e) {
+                exit($e->getMessage());
             }
 
             $_token = $token->getToken();
         }
 
-        $this->_getAdsense($oauth2user->auth['adsense#account'],
+        return $this->_getAdsense($oauth2user->auth['adsense#account'],
             [
                 'startDate' => date('Y-m-d', strtotime('-8 days')),
                 'endDate' => date('Y-m-d'),
@@ -111,17 +115,58 @@ class LaMetric_Adsense
                 'dimension' => 'DATE',
                 'useTimezoneReporting' => true,
             ],
-            [null, 'EARNINGS', 'COST_PER_CLICK', 'PAGE_VIEWS_CTR'],
+            [
+                null, 
+                'EARNINGS', 
+                'COST_PER_CLICK', 
+                'PAGE_VIEWS_CTR',
+            ],
             $_token,
             $this->symbol
         );
+    }
+
+    public function show() {
+        header('Content-Type: application/json');
+        echo json_encode($this->data());
+    }
+
+    public function push() {
+        try {
+            $client = new \GuzzleHttp\Client();
+        }
+        catch (\GuzzleHttp\Exception\ClientException $e) {
+            exit($e->getMessage());
+        }
+
+        try {
+            $json = json_encode($this->data());
+            $push = $client->request('POST', $this->laMetricPushAllUrl, 
+            [
+                'headers' => [
+                    'Accept' => 'application/json',
+                    'Cache-Control' => 'no-cache',
+                    'X-Access-Token' => $this->accessToken,
+                ],
+                'body' => $json
+            ]);
+            if ($push->getStatusCode()) {
+                echo 'Successful';
+            }
+            else {
+                echo 'Failure';
+            }
+        }
+        catch (\GuzzleHttp\Exception\RequestException $e) {
+            exit($e->getMessage());
+        }
     }
 
     private function _getAdsense($userId, $params, $metric, $token, $prefix)
     {
         $query = http_build_query($params).implode('&metric=', $metric);
         $url = 'https://www.googleapis.com/adsense/v1.4/accounts/'.$userId.'/reports?'.str_replace(['=0', '=1'], ['=false', '=true'], $query);
-        $client = new GuzzleHttp\Client();
+        $client = new \GuzzleHttp\Client();
         $res = $client->request('GET', $url, [
             'headers' => [
                 'Authorization' => 'Bearer '.$token,
@@ -151,8 +196,7 @@ class LaMetric_Adsense
             $average_click = array_sum($click) / count($click);
             $average_ctr = array_sum($ctr) / count($ctr);
 
-            header('Content-Type: application/json');
-            echo json_encode([
+            $data = [
                 'frames' => [
                     [
                         'text' => $prefix.$today[1], // Presently
@@ -179,14 +223,16 @@ class LaMetric_Adsense
                         'icon' => 'i27458',
                     ],
                 ],
-            ]);
+            ];
+
+            return $data;
         }
     }
 
     private function _getAdsenseAccounts($token)
     {
         $url = 'https://www.googleapis.com/adsense/v1.4/accounts';
-        $client = new GuzzleHttp\Client();
+        $client = new \GuzzleHttp\Client();
         $res = $client->request('GET', $url, [
             'headers' => [
                 'Authorization' => 'Bearer '.$token,
@@ -204,7 +250,7 @@ class LaMetric_Adsense
                         echo '<b>',$k,'</b>: ',(is_bool($v)) ? ((false === $v) ? 'No' : 'Yes') : $v,'</br>';
                     }
                 }
-                echo '<b>Add: ','<b><a href="/lametric.php?',http_build_query(['accounts' => true, 'kind' => htmlspecialchars($value->kind), 'id' => $value->id]),'">',$value->id,'</a></b><hr>';
+                echo '<b>Add: ','<b><a href="/',$this->fileScript,'?',http_build_query(['accounts' => true, 'kind' => htmlspecialchars($value->kind), 'id' => $value->id]),'">',$value->id,'</a></b><hr>';
             }
         }
     }
