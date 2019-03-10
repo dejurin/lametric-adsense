@@ -3,14 +3,14 @@
 require 'vendor/autoload.php';
 
 $LMA = new \Dejurin\LaMetric_Adsense([
-    'clientId' 	=> '',
-    'clientSecret' => '',
+    'clientId' 	=> '', // Google Client Id 
+    'clientSecret' => '', // Google Client Secret
     'redirectUri' => 'http://localhost:8000/'.basename(__FILE__).'?auth',
     'accessType' => 'offline',
 ],
 '', // La Metric: Access Token
 '', // La Metric: URL for pushing data to all 
-__DIR__.'/db', // db path
+__DIR__.'/db', // DB path
 basename(__FILE__) // current filename
 );
 
